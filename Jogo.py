@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import PhotoImage
 import pandas as pd
-import random
 
 
 pygame.init()
@@ -188,7 +187,6 @@ def play_local():
     opc5.pack(pady=10)
 
     janela.mainloop()
-    pygame.display.iconify(tela)
 
 
 def sair_jogo():
