@@ -1,6 +1,6 @@
 Jogo Trivia Battle War
 
-Projeto 1 - Sistemas Distribuídos - UFS
+Projeto - Sistemas Distribuídos - UFS
 
 Grupo:
 
@@ -9,4 +9,4 @@ Luan Prata Mendonça |
 Mário Narcizo dos Anjos Júnior |
 Victoria Moura Santos |
 
-Acesso ao servidor aws utilizando SSH e Putty para acesso remoto.
+Acesso ao servidor AWS.
