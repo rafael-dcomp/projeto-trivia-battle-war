@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz - Trivia Battle War</title>
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #quiz-container {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 3px solid #ffcc00;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px #ffcc00;
+            width: 80%;
+            max-width: 500px;
+            margin: auto;
+        }
+        button {
+            background: #ffcc00;
+            border: 3px solid #ff0000;
+            padding: 10px 20px;
+            margin: 10px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="quiz-container">
+        <h1>Quiz</h1>
+        <div id="question"></div>
+        <div id="options"></div>
+        <button id="inicio-button">Iniciar</button>
+    </div>
+
+    <script>
+        const ws = new WebSocket("ws://3.230.4.246:8000/ws");
+        let correctAnswers = 0;
+        let questions = [];
+        let currentQuestionIndex = 0;
+
+        function fetchQuestions() {
+            ws.send(JSON.stringify({ action: "get_questions" }));
+        }
+        ws.onmessage = function(event) {
+            const response = JSON.parse(event.data);
+
+            if (response.action === "load_questions") {
+                questions = response.questions;
+                startGame();
+            }
+        };
+
+        function startGame() {
+            currentQuestionIndex = 0;
+            correctAnswers = 0;
+            showNextQuestion();
+        }
+
+        function showNextQuestion() {
+            if (currentQuestionIndex < questions.length) {
+                let questionData = questions[currentQuestionIndex];
+                document.getElementById("question").innerText = questionData.question;
+
+                let optionsContainer = document.getElementById("options");
+                optionsContainer.innerHTML = "";
+                questionData.options.forEach((option, index) => {
+                    let btn = document.createElement("button");
+                    btn.innerText = option;
+                    btn.onclick = () => submitAnswer(index, questionData.answer);
+                    optionsContainer.appendChild(btn);
+                });
+            } else {
+                ws.send(JSON.stringify({ action: "end_game" }));
+                alert(`Jogo finalizado! Você acertou ${correctAnswers} de ${questions.length} perguntas.`);
+            }
+        }
+
+        function submitAnswer(answerIndex, correctIndex) {
+            if (answerIndex === correctIndex) {
+                correctAnswers++;
+                ws.send(JSON.stringify({ action: "update_score" })); // Atualiza o servidor
+            }
+
+            currentQuestionIndex++;
+            showNextQuestion();
+        }
+        document.getElementById("inicio-button").addEventListener("click", fetchQuestions);
+
+    </script>
+</body>
+</html>

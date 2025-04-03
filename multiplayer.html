@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu - Trivia Battle War</title>
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #fff;
+            text-align: center;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #menu-container {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 3px solid #ffcc00;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px #ffcc00;
+            width: 80%;
+            max-width: 500px;
+            margin: auto;
+        }
+        button {
+            background: #ffcc00;
+            border: 3px solid #ff0000;
+            padding: 10px 20px;
+            margin: 10px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #lobby, #join-room {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu-container">
+        <h1>Menu</h1>
+        <button id="create-room-button">Criar Sala</button>
+        <button id="join-room-button">Entrar em uma Sala</button>
+        <button id="back">Voltar</button>
+
+        <div id="lobby">
+            <h2>Lobby</h2>
+            <div id="room-code"></div>
+            <p>Aguardando outros jogadores...</p>
+        </div>
+
+        <div id="join-room">
+            <h2>Entrar em uma Sala</h2>
+            <input type="text" id="room-code-input" placeholder="Digite o código da sala">
+            <button id="confirm-join-button">Confirmar</button>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket("ws://3.230.4.246:8000/ws");
+        let currentRoom = null;
+        let isRoomCreator = false; // Identifica se o usuário criou a sala
+
+        document.getElementById("create-room-button").onclick = function() {
+            createRoom();
+        };
+
+        document.getElementById("join-room-button").onclick = function() {
+            showJoinRoom();
+        };
+
+        document.getElementById("confirm-join-button").onclick = function() {
+            joinRoom();
+        };
+        document.getElementById("back").onclick = function() {
+            voltar();
+        };
+
+        function createRoom() {
+            const roomCode = Math.floor(1000 + Math.random() * 9000);
+            currentRoom = roomCode;
+            isRoomCreator = true; // Define que este usuário criou a sala
+
+            document.getElementById("room-code").innerText = "Código da Sala: " + roomCode;
+            document.getElementById("lobby").style.display = "block";
+            document.getElementById("join-room").style.display = "none";
+
+            ws.send(JSON.stringify({ action: "create", roomCode: roomCode }));
+        }
+
+        function showJoinRoom() {
+            document.getElementById("lobby").style.display = "none";
+            document.getElementById("join-room").style.display = "block";
+        }
+
+        function joinRoom() {
+            const roomCode = document.getElementById("room-code-input").value;
+            if (!roomCode) {
+                alert("Digite um código válido.");
+                return;
+            }
+
+            ws.send(JSON.stringify({ action: "join", roomCode: roomCode }));
+        }
+
+        ws.onmessage = function(event) {
+            const response = JSON.parse(event.data);
+            console.log("Resposta recebida:", response);
+
+            if (response.status === "success") {
+                alert("Entrou na sala com sucesso!");
+                window.location.href = "/game.html"; // Redireciona o jogador que entrou
+            } else if (response.status === "start_game" && isRoomCreator) {
+                // Se for o criador e o jogo for iniciado, redireciona também
+                window.location.href = "/game.html";
+            } else {
+                alert(response.message || "Não foi possível entrar na sala.");
+            }
+        };
+        function voltar() {
+            window.location.href = "/";
+        }
+
+    </script>
+</body>
+</html>
