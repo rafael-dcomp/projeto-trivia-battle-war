@@ -1,246 +1,126 @@
-
-from sys import exit
-from pygame.locals import *
-import pygame
-import os
-from time import sleep
-import asyncio
-import websockets
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse
+import uvicorn
 import json
 
+app = FastAPI()
 
+# Perguntas e respostas em memória
 questions = [
-    {
-        "question": "Qual é a capital da França?",
-        "options": ["Londres", "Berlim", "Paris", "Madri"],
-        "answer": 2
-    },
-    {
-        "question": "Qual é a soma de 2 + 2?",
-        "options": ["3", "4", "5", "6"],
-        "answer": 1
-    },
-    {
-        "question": "Qual é o maior planeta do sistema solar?",
-        "options": ["Terra", "Marte", "Júpiter", "Saturno"],
-        "answer": 2
-    }
+    {"question": "Qual é o maior planeta do sistema solar?",
+     "options": ["Terra", "Marte", "Júpiter", "Saturno"],
+     "answer": 2},
+
+    {"question": "Quem escreveu 'Dom Quixote'?",
+     "options": ["Machado de Assis", "Miguel de Cervantes", "William Shakespeare", "José Saramago"],
+     "answer": 1},
+
+    {"question": "Qual é o símbolo químico do ouro?",
+     "options": ["Au", "Ag", "Fe", "Hg"],
+     "answer": 0},
+
+    {"question": "Em que ano aconteceu a Independência do Brasil?",
+     "options": ["1500", "1822", "1889", "1945"],
+     "answer": 1},
+
+    {"question": "Qual é o time com mais títulos da Copa do Mundo?",
+     "options": ["Brasil", "Alemanha", "Itália", "Argentina"],
+     "answer": 0}
 ]
 
-# Variáveis do jogo
-current_question = 0
-score = 0
+rooms: dict[str, list] = {}
 
 
-pygame.init()
-
-font = pygame.font.Font(None, 36)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (200, 200, 200)
-
-# Proporção de Tela e Nome da Janela
-largura = 1200
-altura = 675
-tela = pygame.display.set_mode((largura, altura))
-pygame.display.set_caption("Trivia Battle War")
-img = pygame.image.load("TelaPerguntas.png")
-img = pygame.transform.scale(img, (1200, 675))
-background = pygame.image.load("TBW.png")
-background = pygame.transform.scale(background, (1200, 675))
-
-# MUSICA DE FUNDO DO JOGO
-musica_de_fundo = pygame.mixer.music.load("Spektrem - Shine [NCS Release].mp3")
-pygame.mixer.music.play(-1)
-pygame.mixer.music.set_volume(0.1)
-
-# Classe Para os Botões
+@app.get("/")
+async def get():
+    with open("index.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
 
 
-class Button():
-    def __init__(self, x, y, image):
-        self.image = image
-        self.rect = self.image.get_rect()
-        self.rect.topleft = (x, y)
-        self.clicked = False
-
-    def draw(self, surface):
-        action = False
-
-        # Pegar posição do mouse#Pegar posição do mouse
-        mouse_pos = pygame.mouse.get_pos()
-
-        # Checar se um botão foi clicado ou se o mouse está sobre
-        if self.rect.collidepoint(mouse_pos):
-            # Clique do mouse esquerdo
-            if pygame.mouse.get_pressed()[0] == 1 and self.clicked == False:
-                self.clicked = True
-                action = True
-
-        # Reseta o Botão para clicar novamente
-        if pygame.mouse.get_pressed()[0] == 0:
-            self.clicked = False
-
-        surface.blit(self.image, (self.rect.x, self.rect.y))
-
-        return action
+@app.get("/quiz.html")
+async def get_quiz():
+    with open("quiz.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
 
 
-# Variáveis
-connected_clients = set()
-salas = {}
-
-# IMAGENS Botões DO MENU
-jg_local = pygame.image.load('jogo_local.png').convert_alpha()
-jg_multiplayer = pygame.image.load('multiplayer.png').convert_alpha()
-jg_config = pygame.image.load('config.png').convert_alpha()
-jg_exit = pygame.image.load('sair_do_jogo.png').convert_alpha()
-
-# BOtÃO VOLTAR
-jg_voltar = pygame.image.load('voltar.png').convert_alpha()
-
-# IMAGENS BOTÕES MULTIPLAYERS
-jg_entrar_sala = pygame.image.load('entrar_sala.png').convert_alpha()
-jg_criar_sala = pygame.image.load('criar_sala.png').convert_alpha()
-
-# Botões Menu
-bt_local = Button(450, 200, jg_local)
-bt_mult = Button(450, 300, jg_multiplayer)
-bt_config = Button(450, 400, jg_config)
-bt_exit = Button(450, 500, jg_exit)
-
-# Botões MultiPlayer
-bt_criar_sala = Button(450, 200, jg_criar_sala)
-bt_entrar_sala = Button(450, 450, jg_entrar_sala)
-
-# Botão VOLTAR
-bt_voltar = Button(10, 10, jg_voltar)
+@app.get("/multiplayer.html")
+async def get_multiplayer():
+    with open("multiplayer.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
 
 
-def multiplayer():
-
-    # Criação da Entrada de Texto
-    cod_entrada = pygame.Rect(500, 385, 200, 40)
-    codigo = ""
-    status = False
-
-    var = True
-    while var:
-        # Tela Estática
-        tela.blit(background, (0, 0))
-
-        # Ativa Botões do Multiplayer
-        bt_criar_sala.draw(tela)
-        bt_entrar_sala.draw(tela)
-        if bt_voltar.draw(tela):
-            main_menu()
-
-        # Ativa Entrada de Texto
-        entrada_txt = font.render("Código da Sala:", True, BLACK)
-        tela.blit(entrada_txt, (500, 350))
-        color = BLACK if status else GRAY
-        pygame.draw.rect(tela, color, cod_entrada, 2)
-        # Exibir txt
-        txt = font.render(codigo, True, BLACK)
-        tela.blit(txt, (cod_entrada.x + 10, cod_entrada.y + 5))
-
-        # Looping do Jogo
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                var = False
-                pygame.quit()
-                exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                status = cod_entrada.collidepoint(event.pos)
-            elif event.type == pygame.KEYDOWN and status:
-                if event.key == pygame.K_BACKSPACE:
-                    codigo = codigo[:-1]  # Apaga um caractere
-                elif event.key == pygame.K_RETURN:
-                    print(f"Texto digitado: {codigo}")  # Exibe no console
-                else:
-                    codigo += event.unicode  # Adiciona a tecla digitada ao texto
-        pygame.display.update()
+@app.get("/sobre.html")
+async def get_quiz():
+    with open("sobre.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
 
 
-def play_local():
+@app.get("/game.html")
+async def get_game():
+    with open("game.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
 
-    def draw_question(question_data):
-        tela.blit(img, (0, 0))
-        if bt_voltar.draw(tela):
-            main_menu()
-        question_text = font.render(question_data["question"], True, BLACK)
-        tela.blit(question_text, (450, 150))
 
-        for i, option in enumerate(question_data["options"]):
-            option_text = font.render(f"{i + 1}. {option}", True, BLACK)
-            tela.blit(option_text, (450, 200 + i * 40))
-
-        pygame.display.flip()
-
-    def winner():
-        tela.blit(img, (0, 0))
-
-        if bt_voltar.draw(tela):
-            main_menu()
-        question_text = font.render(
-            "Fim de Jogo, Sua Pontuação foi de: " + str(score) + "/" + str(len(questions)), True, BLACK)
-        tela.blit(question_text, (350, 150))
-        pygame.display.flip()
-        sleep(3)
-        main_menu()
-
-    def main():
-        global current_question, score
-
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
         while True:
+            data = await websocket.receive_text()
+            message = eval(data)  # Use json.loads(data) para mais segurança
 
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    exit()
+            action = message.get("action")
+            # Converter para string por segurança
+            room_code = str(message.get("roomCode"))
 
-                if event.type == pygame.KEYDOWN:
-                    if event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
-                        answer = event.key - pygame.K_1
-                        if answer == questions[current_question]["answer"]:
-                            score += 1
-                        current_question += 1
+            if action == "create":
+                if room_code not in rooms:
+                    rooms[room_code] = []  # Criar a sala
+                    await websocket.send_json({"status": "success", "message": "Sala criada!"})
+                else:
+                    await websocket.send_json({"status": "error", "message": "Sala já existe!"})
 
-                        if current_question >= len(questions):
-                            current_question = 0
-                            winner()
+            elif action == "join":
+                if room_code in rooms:
+                    if len(rooms[room_code]) < 2:
+                        rooms[room_code].append(websocket)
+                        await websocket.send_json({"status": "success", "message": "Entrou na sala!"})
 
-            draw_question(questions[current_question])
-    main()
+                        if len(rooms[room_code]) == 2:
+                            # Notificar ambos os jogadores para iniciar o jogo
+                            for ws in rooms[room_code]:
+                                await ws.send_json({"status": "start_game", "message": "Jogo iniciando!"})
+                    else:
+                        await websocket.send_json({"status": "error", "message": "Sala cheia!"})
+                else:
+                    await websocket.send_json({"status": "error", "message": "Sala não encontrada!"})
 
+            elif action == "get_questions":
+                await websocket.send_json({"action": "load_questions", "questions": questions})
+            elif action == "answer":
+                selected_answer = message.get("answer")
+                question_index = message.get("question_index")
 
-def sair_jogo():
-    exit()
+                if questions[question_index]["answer"] == selected_answer:
+                    if websocket == player1_ws:
+                        player_scores[player1_ws] += 1
+                    elif websocket == player2_ws:
+                        player_scores[player2_ws] += 1
 
+    # Envia a atualização do placar para ambos os jogadores
+                await player1_ws.send_json({
+                    "action": "update_score",
+                    "player1Score": player_scores.get(player1_ws, 0),
+                    "player2Score": player_scores.get(player2_ws, 0)
+                })
 
-def main_menu():  # TELA INICIAL DO JOGO
-    var = True
-    while var:
-        # Tela Estática
-        tela.blit(background, (0, 0))
+                await player2_ws.send_json({
+                    "action": "update_score",
+                    "player1Score": player_scores.get(player1_ws, 0),
+                    "player2Score": player_scores.get(player2_ws, 0)
+                })
+    except WebSocketDisconnect:
+        print("Cliente desconectado.")
 
-        # Ativar Visualização dos Botões
-        if bt_local.draw(tela):
-            play_local()
-        if bt_mult.draw(tela):
-            multiplayer()
-        bt_config.draw(tela)
-        if bt_exit.draw(tela):
-            sair_jogo()
-
-        # Looping do Jogo
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                var = False
-                pygame.quit()
-                exit()
-
-        pygame.display.update()
-
-
-main_menu()
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
